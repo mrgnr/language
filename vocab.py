@@ -7,10 +7,15 @@ import tinycards
 
 
 class Word:
-    def __init__(self, word, definition=None, pos=None):
+    _NORMALIZERS = {
+        'adjective': strip_adjective
+    }
+
+    def __init__(self, word, definition=None, pos=None, wordtrie=None):
         self.word = word
         self.definition = definition
         self.pos = pos if pos is not None else []
+        self.wordtrie = wordtrie
 
     def update_pos(self):
         from wiktionaryparser import WiktionaryParser
@@ -36,11 +41,37 @@ class Word:
     def is_preposition(self):
         return 'preposition' in self.pos
 
-    def normalize(self):
-        pass
+    def normalize(self, wordtrie=None):
+        wordtrie = wordtrie if wordtrie else self.wordtrie
+
+        if not wordtrie:
+            raise ValueError('A WordTrie must be given!')
+
+        prefixes, _ = wordtrie.search(self.word)
+
+        # Get functions to attempt to normalize the word, using part-of-speech
+        # as a hint if available
+        normalizers = []
+        for pos in self.pos:
+            if pos in self._NORMALIZERS:
+              normalizers.append(self._NORMALIZERS[pos])
+        else:
+            normalizers = self._NORMALIZERS.values()
+
+        # Attempt to normalize the word until a match is found in the wordtrie
+        for normalizer in normalizers:
+            normalized = normalizer(self.word)
+            if normalized in prefixes:
+                return normalized
+
+        # Give up -- no normalization could be done
+        return self.word
 
     def __gt__(self, other):
         return self.word > other.word
+
+    def __str__(self):
+        return self.word
 
 class WordTrie:
     def __init__(self, words):
@@ -186,14 +217,14 @@ def strip_article(s, articles=['der', 'das', 'die', 'the']):
     return stripped.strip()
 
 
-def strip_adjective(s, endings=['e', 'en', 'er', 'es']):
+def strip_adjective(s, endings=['e', 'en', 'er', 'es', 'em']):
     for ending in endings:
         if s.endswith(ending):
             return s[:-len(ending)]
     return s
 
 
-def normalize_adjective(s, adjectives=None, endings=['e', 'en', 'er', 'es']):
+def normalize_adjective(s, adjectives=None, endings=['e', 'en', 'er', 'es', 'em']):
     for ending in endings:
         if s.endswith(ending) and s[:-len(ending)] in adjectives:
             return s[:-len(ending)]
@@ -211,9 +242,9 @@ def part_of_speech(s):
     word = parser.fetch(s)
     return [definition['partOfSpeech'] for entry in word for definition in entry['definitions']]
 
+
 def tinycard_sort_key(tinycard):
     return strip_article(tinycard.front.concepts[0].fact.text).lower()
-
 
 
 def read_file_lines(path):
@@ -223,6 +254,7 @@ def read_file_lines(path):
             if not line:
                 break
             yield line
+
 
 def wordtrie_from_file(path):
     file_lines = read_file_lines(path)
