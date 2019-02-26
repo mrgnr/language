@@ -42,6 +42,60 @@ class Word:
     def __gt__(self, other):
         return self.word > other.word
 
+class WordTrie:
+    def __init__(self, words):
+        self._data = self._prefix_groups(words)
+
+    def search(self, word):
+        return self._search(word, 0, self._data)
+
+    def _search(self, word, i_start, data):
+        for i in range(i_start, len(word) + 1):
+            prefix = word[:i]
+            print(prefix)
+            if prefix in data:
+                print('\tFound bitches!: {}'.format(prefix))
+                result = self._search(word, i_start, data[prefix])
+                #result = self._search(word, 0, data[prefix])
+                if result:
+                    return result
+                else:
+                    return data[prefix], i
+
+        return None
+
+    def _prefix_groups(self, words):
+        prefix = None
+        groups = dict()
+        current_group = []
+
+        for word in words:
+            # On the first word, just set it as the prefix and move on
+            if prefix is None:
+                prefix = word
+                continue
+
+            if is_prefix(prefix, word):
+                current_group.append(word)
+            else:
+                # We've encountered a new prefix, so save the current group
+                if len(current_group):
+                    groups[prefix] = current_group
+                    current_group = []
+                prefix = word
+
+        # Dont forget to save the current group when we run out of words!
+        if len(current_group):
+            groups[prefix] = current_group
+
+        # Recurse on longer prefixes
+        for new_prefix, new_words in groups.items():
+            new_groups = self._prefix_groups(new_words)
+            if new_groups:
+                groups[new_prefix] = new_groups
+
+        return groups
+
 
 def tinycards_login():
     username = os.environ.get('TINYCARDS_IDENTIFIER')
@@ -145,45 +199,6 @@ def part_of_speech(s):
 def tinycard_sort_key(tinycard):
     return strip_article(tinycard.front.concepts[0].fact.text).lower()
 
-def prefix_groups(words, r=False):
-    prefix = None
-    groups = dict()
-    current_group = []
-
-    for word in words:
-        # Filter out abbreviations and single letters
-        #if len(word) < 2 or word == word.upper() or not word.startswith('gut'):
-        #    continue
-
-        # First valid word
-        if prefix is None:
-            prefix = word
-            continue
-
-        if is_prefix(prefix, word):
-            current_group.append(word)
-        else:
-            # We've encountered a new potential prefix, so save the current
-            # group
-            if len(current_group):
-                groups[prefix] = current_group
-                current_group = []
-            prefix = word
-
-    # Dont forget to save the current group when we run out of words!
-    if len(current_group):
-        groups[prefix] = current_group
-
-    if r:
-        # recursive part
-        for key, val in groups.items():
-            #import pdb; pdb.set_trace()
-            print(key)
-            new_groups = prefix_groups(val, r=r)
-            if new_groups:
-                groups[key] = new_groups
-
-    return groups
 
 
 def read_file_lines(path):
@@ -194,9 +209,9 @@ def read_file_lines(path):
                 break
             yield line
 
-def prefix_groups_from_file(path, r=False):
+def wordtrie_from_file(path):
     file_lines = read_file_lines(path)
-    return prefix_groups(file_lines, r=r)
+    return WordTrie(file_lines)
 
 
 if __name__ == '__main__':
