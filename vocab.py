@@ -47,22 +47,33 @@ class WordTrie:
         self._data = self._prefix_groups(words)
 
     def search(self, word):
-        return self._search(word, 0, self._data)
+        subtree, _ = self._search(word, 0, self._data)
+        return subtree
 
     def _search(self, word, i_start, data):
+        subtree = None
+        i_end = i_start
+
         for i in range(i_start, len(word) + 1):
             prefix = word[:i]
-            print(prefix)
+            #print(prefix)
             if prefix in data:
-                print('\tFound bitches!: {}'.format(prefix))
-                result = self._search(word, i_start, data[prefix])
+                # Add prefixes here!
+                #print('\tFound bitches!: {}'.format(prefix))
+                result, end = self._search(word, i_start, data[prefix])
                 #result = self._search(word, 0, data[prefix])
-                if result:
-                    return result
+                if result is not None:
+                    subtree = result
+                    i_end = end
                 else:
-                    return data[prefix], i
+                    subtree = data[prefix]
+                    i_end = i
 
-        return None
+        #print('DONE {} / {}'.format(i_end, len(word)))
+        if i_end < len(word):
+            return None, i_end
+        else:
+            return subtree, i_end
 
     def _prefix_groups(self, words):
         prefix = None
@@ -93,6 +104,8 @@ class WordTrie:
             new_groups = self._prefix_groups(new_words)
             if new_groups:
                 groups[new_prefix] = new_groups
+            else:
+                groups[new_prefix] = {word: {} for word in new_words}
 
         return groups
 
