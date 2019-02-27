@@ -6,6 +6,13 @@ from pathlib import Path, PurePath
 import tinycards
 
 
+def strip_adjective(s, endings=['e', 'en', 'er', 'es', 'em']):
+    for ending in endings:
+        if s.endswith(ending):
+            return s[:-len(ending)]
+    return s
+
+
 class Word:
     _NORMALIZERS = {
         'adjective': strip_adjective
@@ -93,7 +100,8 @@ class WordTrie:
                 # Add prefixes here!
                 #print('\tFound bitches!: {}'.format(prefix))
                 prefixes, sub, end = self._search(word, i_start, data[prefix])
-                prefixes.append(prefix)
+                if prefix != word:
+                    prefixes.append(prefix)
                 #sub = self._search(word, 0, data[prefix])
                 if sub is not None:
                     subtree = sub
@@ -123,13 +131,12 @@ class WordTrie:
                 current_group.append(word)
             else:
                 # We've encountered a new prefix, so save the current group
-                if len(current_group):
-                    groups[prefix] = current_group
-                    current_group = []
+                groups[prefix] = current_group
+                current_group = []
                 prefix = word
 
         # Dont forget to save the current group when we run out of words!
-        if len(current_group):
+        if prefix:
             groups[prefix] = current_group
 
         # Recurse on longer prefixes
@@ -141,6 +148,22 @@ class WordTrie:
                 groups[new_prefix] = {word: {} for word in new_words}
 
         return groups
+
+    def __contains__(self, word):
+        return self._contains(word, 0, self._data)
+        #_, subtree = self.search(word)
+        #return subtree is not None
+
+    def _contains(self, word, i_start, data):
+        if word in data:
+            return True
+
+        for i in range(i_start, len(word) + 1):
+            prefix = word[:i]
+            if prefix in data and self._contains(word, i, data[prefix]):
+                return True
+
+        return False
 
 
 def tinycards_login():
@@ -217,11 +240,6 @@ def strip_article(s, articles=['der', 'das', 'die', 'the']):
     return stripped.strip()
 
 
-def strip_adjective(s, endings=['e', 'en', 'er', 'es', 'em']):
-    for ending in endings:
-        if s.endswith(ending):
-            return s[:-len(ending)]
-    return s
 
 
 def normalize_adjective(s, adjectives=None, endings=['e', 'en', 'er', 'es', 'em']):
@@ -247,23 +265,42 @@ def tinycard_sort_key(tinycard):
     return strip_article(tinycard.front.concepts[0].fact.text).lower()
 
 
-def read_file_lines(path):
+def read_file_lines(path, ignore=None, transform=None):
+    ignore = ignore if ignore else lambda x: False
+    transform = transform if transform else lambda x: x
+
     with open(path, 'r') as f:
-        while True:
-            line = f.readline().strip()
-            if not line:
-                break
-            yield line
+        for line in f:
+            if ignore(line):
+                continue
+            yield transform(line)
 
 
-def wordtrie_from_file(path):
-    file_lines = read_file_lines(path)
+def wordtrie_from_file(path, ignore=None, transform=None):
+    file_lines = read_file_lines(path, ignore=ignore, transform=transform)
     return WordTrie(file_lines)
+
+def parse_words(lines, stripchars=None, sep=None):
+    import string
+    if stripchars is None:
+        stripchars = string.whitespace + string.punctuation + string.digits + '«»'
+
+    for line in lines:
+        #for word in line.lower().split(sep):
+        for word in line.split(sep):
+            word = word.strip(stripchars)
+            if len(word) > 0:
+                yield word
 
 
 if __name__ == '__main__':
+    ignore = lambda x: x == x.upper() or len(x.strip()) < 2
+    transform = lambda x: x.strip()
+    hh = wordtrie_from_file('/usr/share/dict/ngerman', ignore=ignore, transform=transform)
 
-    client = tinycards_login()
+    print(hh.search('gute'))
+
+    #client = tinycards_login()
     #save_all_to_csv(client)
-    cards = get_tinycards(client)
-    cards = sorted(cards, key=tinycard_sort_key)
+    #cards = get_tinycards(client)
+    #cards = sorted(cards, key=tinycard_sort_key)
